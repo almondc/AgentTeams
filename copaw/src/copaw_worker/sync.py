@@ -292,9 +292,24 @@ class FileSync:
             controller_url,
         )
         if self._k8s_mode:
-            logger.info("_ensure_alias: k8s mode, skipping mc alias set (mc-wrapper handles credentials)")
-            self._alias_set = True
-            return
+            if mc_host_set:
+                logger.info(
+                    "_ensure_alias: k8s mode, MC_HOST_%s already set, skipping mc alias set",
+                    _MC_ALIAS,
+                )
+                self._alias_set = True
+                return
+            logger.info(
+                "_ensure_alias: k8s mode but MC_HOST_%s not set, falling back to static "
+                "mc alias set (no credential-injection wrapper present)",
+                _MC_ALIAS,
+            )
+            # Fall through to the static-credential path below. k8s_mode historically
+            # assumed a credential-injection sidecar/wrapper always sets MC_HOST_<alias>,
+            # but that's only true for storage backends that provide one (e.g. managed
+            # object storage with a k8s-native credential wrapper). Self-hosted/local
+            # MinIO has no such wrapper, so without this fallback the worker never gets
+            # a usable mc alias and every mc call fails with "Unable to stat source".
         if self._cloud_mode:
             logger.info("_ensure_alias: credential path=sts, refreshing MC_HOST_%s", _MC_ALIAS)
             self._refresh_cloud_credentials()
