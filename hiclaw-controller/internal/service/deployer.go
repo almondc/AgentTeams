@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	v1beta1 "github.com/hiclaw/hiclaw-controller/api/v1beta1"
 	"github.com/hiclaw/hiclaw-controller/internal/agentconfig"
@@ -394,7 +395,7 @@ func (d *Deployer) renderAndPushSoulTemplate(ctx context.Context, agentPrefix st
 // PushOnDemandSkills pushes on-demand skills to a worker.
 // Built-in skills are pushed via push-worker-skills.sh. Remote skills are
 // fetched from source registries (currently nacos://) and mirrored to OSS.
-func (d *Deployer) PushOnDemandSkills(ctx context.Context, workerName string, skills []string, remoteSkills []v1beta1.RemoteSkillSource) error {
+func (d *Deployer) PushOnDemandSkills(ctx context.Context, workerName, runtime string, skills []string, remoteSkills []v1beta1.RemoteSkillSource) error {
 	logger := log.FromContext(ctx)
 	if len(skills) == 0 && len(remoteSkills) == 0 {
 		return nil
@@ -414,8 +415,61 @@ func (d *Deployer) PushOnDemandSkills(ctx context.Context, workerName string, sk
 			"worker", workerName, "skills", skills)
 		return nil
 	}
+	// push-worker-skills.sh reads its own local ${HOME}/workers-registry.json as the
+	// source of truth for "does this worker exist" and "what skills does it want" -
+	// a file the embedded/Docker Manager process maintains continuously as workers
+	// are created there, but nothing in the incluster controller ever writes (its
+	// real source of truth is the Worker/Team CRD, already in hand here). Without
+	// this, the script always fails with "Worker '<name>' not found in registry"
+	// against an empty fallback registry. Synthesize just enough of an entry for
+	// this call - merged with whatever's already on disk, not clobbered, since nothing
+	// else refreshes it between reconciles.
+	if err := ensurePushWorkerSkillsRegistryEntry(workerName, runtime, skills); err != nil {
+		logger.Info("workers-registry.json sync failed (non-fatal, skill push will likely fail)", "worker", workerName, "error", err)
+	}
 	_, err := d.executor.RunSimple(ctx, scriptPath, "--worker", workerName, "--no-notify")
 	return err
+}
+
+// ensurePushWorkerSkillsRegistryEntry upserts workerName's entry into the local
+// workers-registry.json file push-worker-skills.sh reads, preserving any other
+// workers' entries already present. See PushOnDemandSkills for why this exists.
+func ensurePushWorkerSkillsRegistryEntry(workerName, runtime string, skills []string) error {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		home = "/root"
+	}
+	return ensurePushWorkerSkillsRegistryEntryAt(filepath.Join(home, "workers-registry.json"), workerName, runtime, skills)
+}
+
+// ensurePushWorkerSkillsRegistryEntryAt is ensurePushWorkerSkillsRegistryEntry with
+// an explicit registry path, split out for testability.
+func ensurePushWorkerSkillsRegistryEntryAt(registryPath, workerName, runtime string, skills []string) error {
+	type registryWorker struct {
+		Runtime string   `json:"runtime,omitempty"`
+		Skills  []string `json:"skills"`
+	}
+	type registryFile struct {
+		Version   int                       `json:"version"`
+		UpdatedAt string                    `json:"updated_at"`
+		Workers   map[string]registryWorker `json:"workers"`
+	}
+
+	reg := registryFile{Version: 1, Workers: map[string]registryWorker{}}
+	if existing, readErr := os.ReadFile(registryPath); readErr == nil {
+		_ = json.Unmarshal(existing, &reg) // malformed/partial content is not fatal - we overwrite our own entry below regardless
+		if reg.Workers == nil {
+			reg.Workers = map[string]registryWorker{}
+		}
+	}
+	reg.Workers[workerName] = registryWorker{Runtime: runtime, Skills: skills}
+	reg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	data, err := json.MarshalIndent(reg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(registryPath, data, 0o644)
 }
 
 func (d *Deployer) seedLocalAgentFiles(ctx context.Context, localAgentDir, agentPrefix string, excludedTopLevel map[string]struct{}) error {
