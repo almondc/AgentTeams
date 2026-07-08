@@ -51,6 +51,18 @@ COPY --from=builder /hiclaw /usr/local/bin/hiclaw
 COPY --from=kube-bin /kube-apiserver /usr/local/bin/kube-apiserver
 COPY config/crd/ /opt/hiclaw/config/crd/
 COPY agent/ /opt/hiclaw/agent/
+# Worker-management scripts under agent/skills/worker-management/scripts/ (e.g.
+# push-worker-skills.sh, invoked by the controller itself for on-demand spec.skills
+# installs) source /opt/hiclaw/scripts/lib/*.sh helpers (hiclaw-env.sh, base.sh for the
+# log() function, etc.) - the same merged lib set the Manager image ships from two
+# directories (manager/Dockerfile: COPY shared/lib/ /opt/hiclaw/scripts/lib/ then
+# COPY manager/scripts/ /opt/hiclaw/scripts/, which includes manager/scripts/lib/). This
+# image never copied either in, so any script under agent/ that sources them fails when
+# the controller invokes it directly - staged into ./scripts-lib by the Makefile (merging
+# both source directories, matching the Manager image's final contents) since this
+# Dockerfile's build context is ./hiclaw-controller/, which can't reach either source
+# directory on its own (same reason agent/ above is staged from ../manager/agent).
+COPY scripts-lib/ /opt/hiclaw/scripts/lib/
 
 # Default endpoint + token-file for the bundled `hiclaw` CLI when invoked via
 # `docker exec hiclaw-controller hiclaw …`. The controller process mints a
