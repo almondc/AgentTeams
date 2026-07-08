@@ -16,6 +16,7 @@ type CoordinationContext struct {
 	TeamCoordinatorIDs []string
 	TeamRoomID         string
 	LeaderDMRoomID     string
+	LeaderRoomID       string // the leader's own 1:1 room with Manager ("Leader Room")
 	HeartbeatEvery     string
 	WorkerIdleTimeout  string
 	TeamWorkers        []TeamWorkerInfo // for leaders: list of team workers
@@ -57,6 +58,9 @@ func buildCoordinationBlock(ctx CoordinationContext) string {
 	switch ctx.Role {
 	case "team_leader":
 		fmt.Fprintf(&b, "- **Upstream coordinator**: @manager:%s (Manager) — you receive tasks from Manager\n", ctx.MatrixDomain)
+		if ctx.LeaderRoomID != "" {
+			fmt.Fprintf(&b, "- **Leader Room**: %s — Manager delegates tasks and expects completion/blocker reports here; @mention Manager in this room, not the Team Room, when reporting up\n", ctx.LeaderRoomID)
+		}
 		if ctx.TeamAdminID != "" {
 			fmt.Fprintf(&b, "- **Team Admin**: %s — can assign tasks and make decisions within the team\n", ctx.TeamAdminID)
 		}
