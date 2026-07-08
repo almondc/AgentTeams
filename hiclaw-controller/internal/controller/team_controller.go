@@ -273,12 +273,25 @@ func (r *TeamReconciler) reconcileTeamNormal(ctx context.Context, t *v1beta1.Tea
 	// Must run before member reconciliation so renderAndPushSoulTemplate
 	// pushes the final SOUL.md to MinIO before the leader container starts
 	// and before DeployWorkerConfig would otherwise race with it.
+	//
+	// The leader's own room ("Leader Room" - where Manager delegates tasks and
+	// expects completion/blocker reports) is created during Step 4's member
+	// reconciliation, so it isn't known yet on the very first reconcile. On
+	// every reconcile after that, it's already recorded in Status.Members from
+	// the prior pass - look it up here so the leader actually learns the room
+	// ID it needs to report back into, rather than only being told to report
+	// to "Manager in Leader Room" with no way to address that room.
+	var leaderRoomID string
+	if ms := t.Status.MemberByName(leaderRuntimeName); ms != nil {
+		leaderRoomID = ms.RoomID
+	}
 	if err := r.Deployer.InjectCoordinationContext(ctx, service.CoordinationDeployRequest{
 		LeaderName:         leaderRuntimeName,
 		Role:               RoleTeamLeader.String(),
 		TeamName:           teamRuntimeName,
 		TeamRoomID:         rooms.TeamRoomID,
 		LeaderDMRoomID:     rooms.LeaderDMRoomID,
+		LeaderRoomID:       leaderRoomID,
 		HeartbeatEvery:     leaderHeartbeatEvery(t),
 		WorkerIdleTimeout:  t.Spec.Leader.WorkerIdleTimeout,
 		TeamWorkers:        workerRuntimeNames,

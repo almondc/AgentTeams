@@ -44,3 +44,45 @@ func TestBuildCoordinationBlock_TeamLeaderEmitsTeamName(t *testing.T) {
 		t.Fatalf("team_leader coordination block missing '**Team**: %s' line:\n%s", ctx.TeamName, block)
 	}
 }
+
+// TestBuildCoordinationBlock_TeamLeaderEmitsOwnRoomID is a regression test for a bug
+// where a Team Leader's coordination block told it to "report to Manager in Leader
+// Room" but never actually gave it that room's Matrix room ID anywhere - Team Room
+// and Leader DM (the Team Admin's DM) were both present, but the leader's own 1:1
+// room with Manager was not. A leader triggered by worker activity in the Team Room
+// (a different Matrix session from its own Leader Room) had no room ID to target and
+// so never reported task completion back to Manager, even though it correctly
+// understood conceptually that it should.
+func TestBuildCoordinationBlock_TeamLeaderEmitsOwnRoomID(t *testing.T) {
+	ctx := CoordinationContext{
+		WorkerName:   "task-test-4-leader",
+		Role:         "team_leader",
+		MatrixDomain: "mx.woodfield.io",
+		TeamName:     "task-test-4",
+		LeaderRoomID: "!NBmHJRdKxi73x6TrVF:mx.woodfield.io",
+	}
+
+	block := buildCoordinationBlock(ctx)
+
+	if !strings.Contains(block, "**Leader Room**: !NBmHJRdKxi73x6TrVF:mx.woodfield.io") {
+		t.Fatalf("team_leader coordination block missing '**Leader Room**' line:\n%s", block)
+	}
+}
+
+// TestBuildCoordinationBlock_TeamLeaderOmitsRoomIDWhenUnknown pins the "not known yet"
+// case (the leader's own room doesn't exist until after its first reconcile) so the
+// block degrades gracefully instead of emitting an empty/placeholder room ID.
+func TestBuildCoordinationBlock_TeamLeaderOmitsRoomIDWhenUnknown(t *testing.T) {
+	ctx := CoordinationContext{
+		WorkerName:   "task-test-4-leader",
+		Role:         "team_leader",
+		MatrixDomain: "mx.woodfield.io",
+		TeamName:     "task-test-4",
+	}
+
+	block := buildCoordinationBlock(ctx)
+
+	if strings.Contains(block, "**Leader Room**") {
+		t.Fatalf("team_leader coordination block should omit '**Leader Room**' when unknown:\n%s", block)
+	}
+}

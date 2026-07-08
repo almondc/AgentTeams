@@ -54,6 +54,7 @@ type CoordinationDeployRequest struct {
 	TeamName           string
 	TeamRoomID         string
 	LeaderDMRoomID     string
+	LeaderRoomID       string // the leader's own 1:1 room with Manager ("Leader Room")
 	HeartbeatEvery     string
 	WorkerIdleTimeout  string
 	TeamWorkers        []string
@@ -327,6 +328,7 @@ func (d *Deployer) InjectCoordinationContext(ctx context.Context, req Coordinati
 		TeamName:           req.TeamName,
 		TeamRoomID:         req.TeamRoomID,
 		LeaderDMRoomID:     req.LeaderDMRoomID,
+		LeaderRoomID:       req.LeaderRoomID,
 		HeartbeatEvery:     req.HeartbeatEvery,
 		WorkerIdleTimeout:  req.WorkerIdleTimeout,
 		TeamWorkers:        teamWorkers,
