@@ -121,6 +121,17 @@ class Worker:
         # Refresh Matrix credentials (E2EE relies on a fresh device_id).
         openclaw_cfg = self._matrix_relogin(openclaw_cfg)
 
+        # Accept any pending room invites (team room, etc.) BEFORE the gateway
+        # starts. The hermes gateway's matrix platform only subscribes to rooms
+        # it is already joined to at its initial sync — rooms invited later (or
+        # invited before startup but never accepted) are silently ignored, so a
+        # worker invited to its team room after boot never receives task
+        # notifications there. CoPaw has an equivalent notify_matrix stage;
+        # Hermes did not, which is why team workers had to have invites accepted
+        # by hand (see docs runbook "Hermes workers don't auto-accept Matrix
+        # room invites"). Uses the freshly re-logged-in token above.
+        self._accept_matrix_invites(openclaw_cfg)
+
         # When we run on the host (dev) and the FS endpoint includes a port,
         # use that port as the gateway port as well so the bridge's _port_remap
         # rewrites container-internal :8080 references correctly.
@@ -275,6 +286,64 @@ class Worker:
             f"(device={new_device}, token={new_token[:10]}...)"
         )
         return openclaw_cfg
+
+    def _accept_matrix_invites(self, openclaw_cfg: Dict[str, Any]) -> None:
+        """Accept all pending Matrix room invitations via an initial sync.
+
+        Mirrors ``copaw_worker.Worker._accept_matrix_invites``. Must run before
+        the gateway's initial sync so newly-joined rooms are subscribed to.
+        """
+        import json
+        import urllib.error
+        import urllib.request
+
+        matrix_cfg = openclaw_cfg.get("channels", {}).get("matrix", {})
+        homeserver = _port_remap(
+            matrix_cfg.get("homeserver", ""), _is_in_container()
+        )
+        token = matrix_cfg.get("accessToken", "")
+        if not homeserver or not token:
+            return
+        headers = {"Authorization": f"Bearer {token}"}
+
+        sync_filter = json.dumps(
+            {"room": {"timeline": {"limit": 0}, "state": {"limit": 0}}}
+        )
+        sync_url = (
+            f"{homeserver}/_matrix/client/v3/sync"
+            f"?filter={urllib.request.quote(sync_filter)}&timeout=0"
+        )
+        try:
+            req = urllib.request.Request(sync_url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                sync_data = json.loads(resp.read())
+        except (urllib.error.URLError, ValueError, TimeoutError) as exc:
+            logger.debug("accept_invites: sync for invites failed: %s", exc)
+            return
+
+        invited = sync_data.get("rooms", {}).get("invite", {})
+        if not invited:
+            return
+
+        console.print(
+            f"[green]Accepting {len(invited)} pending Matrix room invite(s)"
+            f"[/green]"
+        )
+        for room_id in invited:
+            join_url = (
+                f"{homeserver}/_matrix/client/v3/join/"
+                f"{urllib.request.quote(room_id, safe='')}"
+            )
+            try:
+                req = urllib.request.Request(
+                    join_url,
+                    data=b"{}",
+                    headers={**headers, "Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=10)
+            except (urllib.error.URLError, ValueError, TimeoutError) as exc:
+                logger.debug("accept_invites: failed to join %s: %s", room_id, exc)
 
     # ------------------------------------------------------------------
     # mc (MinIO Client) auto-install
