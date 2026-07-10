@@ -120,7 +120,11 @@ else
 fi
 
 AI_GATEWAY_DOMAIN="${HICLAW_AI_GATEWAY_DOMAIN:-aigw-local.hiclaw.io}"
-CONSOLE_URL="http://127.0.0.1:8001"
+# Same precedence as gateway-api.sh's _HIGRESS_CONSOLE_URL (this script doesn't source that lib,
+# so it can't reuse the variable directly) — 127.0.0.1:8001 only resolves in embedded/Docker mode;
+# incluster/k8s mode needs HICLAW_HIGRESS_CONSOLE_URL (set on the Manager container since the
+# woodfield fork's manager-console-credentials fix).
+CONSOLE_URL="${HIGRESS_CONSOLE_URL:-${HICLAW_HIGRESS_CONSOLE_URL:-http://127.0.0.1:8001}}"
 
 # Unified credential key — all YAML configs use accessToken in server.config
 CREDENTIAL_KEY="accessToken"
