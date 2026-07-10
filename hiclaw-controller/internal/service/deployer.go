@@ -36,7 +36,7 @@ type WorkerDeployRequest struct {
 	MatrixPassword string
 
 	// MCP servers declared in spec.mcpServers. The deployer translates this into
-	// mcporter-servers.json and injects Authorization: Bearer <GatewayKey>.
+	// config/mcporter.json and injects Authorization: Bearer <GatewayKey>.
 	McpServers []v1beta1.MCPServer
 
 	TeamAdminMatrixID  string
@@ -276,13 +276,14 @@ func (d *Deployer) DeployWorkerConfig(ctx context.Context, req WorkerDeployReque
 		}
 	}
 
-	// --- mcporter-servers.json ---
+	// --- config/mcporter.json (mcporter 0.11.3+ default read path; the legacy
+	// mcporter-servers.json name it used to also read was dropped) ---
 	if len(req.McpServers) > 0 {
 		mcporterJSON, err := d.agentConfig.GenerateMcporterConfig(req.GatewayKey, req.McpServers)
 		if err != nil {
 			logger.Error(err, "mcporter config generation failed (non-fatal)")
 		} else if mcporterJSON != nil {
-			if err := d.oss.PutObject(ctx, agentPrefix+"/mcporter-servers.json", mcporterJSON); err != nil {
+			if err := d.oss.PutObject(ctx, agentPrefix+"/config/mcporter.json", mcporterJSON); err != nil {
 				logger.Error(err, "mcporter config push failed (non-fatal)")
 			}
 		}
@@ -697,7 +698,7 @@ type ManagerDeployRequest struct {
 	MatrixPassword string
 
 	// MCP servers declared in spec.mcpServers. The deployer translates this into
-	// mcporter-servers.json and injects Authorization: Bearer <GatewayKey>.
+	// config/mcporter.json and injects Authorization: Bearer <GatewayKey>.
 	McpServers []v1beta1.MCPServer
 
 	IsUpdate bool
@@ -752,13 +753,14 @@ func (d *Deployer) DeployManagerConfig(ctx context.Context, req ManagerDeployReq
 		}
 	}
 
-	// --- mcporter-servers.json ---
+	// --- config/mcporter.json (mcporter 0.11.3+ default read path; the legacy
+	// mcporter-servers.json name it used to also read was dropped) ---
 	if len(req.McpServers) > 0 {
 		mcporterJSON, err := d.agentConfig.GenerateMcporterConfig(req.GatewayKey, req.McpServers)
 		if err != nil {
 			logger.Error(err, "mcporter config generation failed (non-fatal)")
 		} else if mcporterJSON != nil {
-			if err := d.oss.PutObject(ctx, agentPrefix+"/mcporter-servers.json", mcporterJSON); err != nil {
+			if err := d.oss.PutObject(ctx, agentPrefix+"/config/mcporter.json", mcporterJSON); err != nil {
 				logger.Error(err, "mcporter config push failed (non-fatal)")
 			}
 		}

@@ -7,7 +7,7 @@ import (
 	v1beta1 "github.com/hiclaw/hiclaw-controller/api/v1beta1"
 )
 
-// GenerateMcporterConfig produces mcporter-servers.json content for a worker or
+// GenerateMcporterConfig produces config/mcporter.json content for a worker or
 // manager's MCP servers. Each entry's URL is used verbatim (the CRD carries the
 // full gateway endpoint), and an Authorization: Bearer <gatewayKey> header is
 // injected so the agent authenticates with the same consumer key it uses for
