@@ -45,15 +45,24 @@ type AccessEntry struct {
 // Transport: "http" (Streamable HTTP, default) | "sse".
 //
 // The controller translates this slice directly into mcporter-servers.json and
-// injects an Authorization: Bearer <consumer-key> header using the same
-// gateway consumer key the agent uses for LLM access. The controller does not
-// perform any gateway-side authorization for MCP servers — upstream access
-// control is the gateway operator's responsibility (or, for local Higress
-// deployments, handled out-of-band by Manager skills).
+// (unless NoGatewayAuth is set) injects an Authorization: Bearer <consumer-key>
+// header using the same gateway consumer key the agent uses for LLM access. The
+// controller does not perform any gateway-side authorization for MCP servers —
+// upstream access control is the gateway operator's responsibility (or, for
+// local Higress deployments, handled out-of-band by Manager skills).
 type MCPServer struct {
 	Name      string `json:"name"`
 	URL       string `json:"url"`
 	Transport string `json:"transport,omitempty"`
+
+	// NoGatewayAuth suppresses the auto-injected Authorization: Bearer
+	// <consumer-key> header for this server. Set it for MCP servers reached
+	// DIRECTLY (not through the AI gateway) that authenticate on their own —
+	// the consumer key is meaningless to them, and some (e.g. the Kubernetes
+	// MCP server, which does credential passthrough) actively break when they
+	// receive an Authorization header they then try to use as their own
+	// upstream credential. Default false (inject the header, prior behavior).
+	NoGatewayAuth bool `json:"noGatewayAuth,omitempty"`
 }
 
 // RemoteSkill identifies one skill from a remote source.

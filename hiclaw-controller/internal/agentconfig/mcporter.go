@@ -32,13 +32,20 @@ func (g *Generator) GenerateMcporterConfig(gatewayKey string, mcpServers []v1bet
 		if transport == "" {
 			transport = "http"
 		}
-		servers[name] = map[string]interface{}{
+		entry := map[string]interface{}{
 			"url":       url,
 			"transport": transport,
-			"headers": map[string]string{
-				"Authorization": "Bearer " + gatewayKey,
-			},
 		}
+		// Inject the gateway consumer key unless the server opts out. Direct
+		// (non-gateway) servers that authenticate on their own set NoGatewayAuth
+		// — some (e.g. the Kubernetes MCP server, which does credential
+		// passthrough) 401 when handed an Authorization header they can't use.
+		if !s.NoGatewayAuth {
+			entry["headers"] = map[string]string{
+				"Authorization": "Bearer " + gatewayKey,
+			}
+		}
+		servers[name] = entry
 	}
 
 	if len(servers) == 0 {

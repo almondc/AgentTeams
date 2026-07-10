@@ -137,3 +137,37 @@ func TestGenerateMcporterConfig_MultipleServers(t *testing.T) {
 		t.Errorf("jira transport = %v", decoded["mcpServers"]["jira"]["transport"])
 	}
 }
+
+func TestGenerateMcporterConfig_NoGatewayAuthOmitsHeader(t *testing.T) {
+	g := NewGenerator(Config{})
+	data, err := g.GenerateMcporterConfig("KEY-123", []v1beta1.MCPServer{
+		{Name: "github", URL: "https://gw.example.com/mcp-servers/github/mcp"},
+		{Name: "k8s", URL: "http://kubernetes-mcp.svc:8080/mcp", NoGatewayAuth: true},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var decoded map[string]map[string]map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	// github: header injected (default behavior).
+	gh := decoded["mcpServers"]["github"]
+	if gh["headers"] == nil {
+		t.Errorf("github should have an injected Authorization header")
+	}
+
+	// k8s: NoGatewayAuth → no headers key at all.
+	k8s, ok := decoded["mcpServers"]["k8s"]
+	if !ok {
+		t.Fatalf("missing k8s entry: %s", string(data))
+	}
+	if _, present := k8s["headers"]; present {
+		t.Errorf("k8s should have NO headers with NoGatewayAuth, got %v", k8s["headers"])
+	}
+	if k8s["url"] != "http://kubernetes-mcp.svc:8080/mcp" {
+		t.Errorf("url = %v", k8s["url"])
+	}
+}
