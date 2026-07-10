@@ -120,6 +120,17 @@ else
 fi
 
 AI_GATEWAY_DOMAIN="${HICLAW_AI_GATEWAY_DOMAIN:-aigw-local.hiclaw.io}"
+# aigw-local.hiclaw.io:8080 is an embedded/Docker-mode convention (that hostname
+# deliberately resolves to 127.0.0.1 via hiclaw.io's own public DNS as a
+# same-container convenience). In incluster/k8s mode the real gateway Service
+# listens on 80/443, not 8080, and even with a hostAlias correcting the DNS
+# answer, port 8080 still connects to nothing there. HICLAW_AI_GATEWAY_URL is
+# already correctly set for every mode (the chart sets it unconditionally on
+# the controller; the woodfield fork's manager-console-credentials fix doesn't
+# touch this one, it was already fine) — use it as the base for mcporter.json
+# URLs instead of reconstructing one from the domain+hardcoded port. Falls back
+# to the domain-based construction, matching prior behavior, when unset.
+AI_GATEWAY_BASE_URL="${HICLAW_AI_GATEWAY_URL:-http://${AI_GATEWAY_DOMAIN}:8080}"
 # Same precedence as gateway-api.sh's _HIGRESS_CONSOLE_URL (this script doesn't source that lib,
 # so it can't reuse the variable directly) — 127.0.0.1:8001 only resolves in embedded/Docker mode;
 # incluster/k8s mode needs HICLAW_HIGRESS_CONSOLE_URL (set on the Manager container since the
@@ -301,17 +312,17 @@ MANAGER_MCPORTER_COMPAT="${HOME}/mcporter-servers.json"
 if [ -n "${MANAGER_KEY}" ]; then
     mkdir -p "${MANAGER_MCPORTER_DIR}"
     if [ -f "${MANAGER_MCPORTER}" ]; then
-        UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg domain "${AI_GATEWAY_DOMAIN}" --arg key "${MANAGER_KEY}" \
+        UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${MANAGER_KEY}" \
             '.mcpServers[$name] = {
-                url: ("http://" + $domain + ":8080/mcp-servers/" + $name + "/mcp"),
+                url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
                 transport: "http",
                 headers: {Authorization: ("Bearer " + $key)}
             }' "${MANAGER_MCPORTER}" 2>/dev/null)
         echo "${UPDATED}" | jq . > "${MANAGER_MCPORTER}"
     else
-        jq -n --arg name "${MCP_SERVER_NAME}" --arg domain "${AI_GATEWAY_DOMAIN}" --arg key "${MANAGER_KEY}" \
+        jq -n --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${MANAGER_KEY}" \
             '{mcpServers: {($name): {
-                url: ("http://" + $domain + ":8080/mcp-servers/" + $name + "/mcp"),
+                url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
                 transport: "http",
                 headers: {Authorization: ("Bearer " + $key)}
             }}}' > "${MANAGER_MCPORTER}"
@@ -357,9 +368,9 @@ if [ -f "${REGISTRY_FILE}" ]; then
         mkdir -p "${MCPORTER_DIR}"
         if [ -f "${MCPORTER_FILE}" ]; then
             # Update existing config/mcporter.json
-            UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg domain "${AI_GATEWAY_DOMAIN}" --arg key "${WORKER_KEY}" \
+            UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${WORKER_KEY}" \
                 '.mcpServers[$name] = {
-                    url: ("http://" + $domain + ":8080/mcp-servers/" + $name + "/mcp"),
+                    url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
                     transport: "http",
                     headers: {Authorization: ("Bearer " + $key)}
                 }' "${MCPORTER_FILE}" 2>/dev/null)
@@ -372,9 +383,9 @@ if [ -f "${REGISTRY_FILE}" ]; then
             fi
         else
             # Create new config/mcporter.json for worker
-            jq -n --arg name "${MCP_SERVER_NAME}" --arg domain "${AI_GATEWAY_DOMAIN}" --arg key "${WORKER_KEY}" \
+            jq -n --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${WORKER_KEY}" \
                 '{mcpServers: {($name): {
-                    url: ("http://" + $domain + ":8080/mcp-servers/" + $name + "/mcp"),
+                    url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
                     transport: "http",
                     headers: {Authorization: ("Bearer " + $key)}
                 }}}' > "${MCPORTER_FILE}"
