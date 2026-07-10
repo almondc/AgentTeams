@@ -156,6 +156,24 @@ type CreateRequest struct {
 	// Pod via native K8s garbage collection. Docker backend ignores this
 	// field.
 	Owner metav1.Object `json:"-"`
+
+	// SecretEnv injects container environment variables sourced from a
+	// Kubernetes Secret key (valueFrom.secretKeyRef), keeping the actual
+	// value out of the Pod spec, any owning CR, and controller memory
+	// beyond what kubelet resolves at container start — unlike Env, which
+	// becomes a literal value visible to anyone who can read the Pod (e.g.
+	// via the same broad read-only RBAC every hiclaw ServiceAccount in the
+	// namespace already has). K8s backend only; Docker backend ignores this
+	// field (embedded mode has no equivalent Secret object to reference).
+	SecretEnv []SecretEnvVar `json:"-"`
+}
+
+// SecretEnvVar names one container environment variable sourced from a
+// Kubernetes Secret key. See CreateRequest.SecretEnv.
+type SecretEnvVar struct {
+	EnvName    string
+	SecretName string
+	SecretKey  string
 }
 
 // Deployment modes returned by backends.

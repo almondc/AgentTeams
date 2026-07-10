@@ -61,6 +61,24 @@ type ManagerReconciler struct {
 	// when an admin upgrades from the legacy single-container manager.
 	UserLanguage string
 	UserTimezone string
+
+	// RuntimeEnvSecretName (Config.RuntimeEnvSecretName) is the Secret the
+	// Manager Pod's HICLAW_ADMIN_PASSWORD env var is sourced from via
+	// valueFrom.secretKeyRef. Empty skips injection entirely (previous
+	// behavior): in incluster/k8s mode the Manager then has no way to log
+	// in to the Higress Console, and any skill assuming it can (mcp-server-
+	// management, git-delegation-management) fails at that step. See
+	// docs/agent-pod-template.md's sibling gap writeup in the woodfield
+	// fork's ai-lab-architecture.md for how this was found.
+	RuntimeEnvSecretName string
+
+	// HigressConsoleURL is copied verbatim into the Manager Pod's
+	// HICLAW_HIGRESS_CONSOLE_URL env var (Config.HigressBaseURL — the same
+	// value the controller itself already uses to reach the Console). Not
+	// a secret, safe as a literal env var. Empty leaves the Manager's own
+	// script default (http://127.0.0.1:8001) in place, which only resolves
+	// in embedded/Docker mode.
+	HigressConsoleURL string
 }
 
 // managerContainerName returns the container/pod name for a Manager CR.

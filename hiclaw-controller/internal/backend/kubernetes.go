@@ -224,7 +224,7 @@ func (k *K8sBackend) Create(ctx context.Context, req CreateRequest) (*WorkerResu
 		Name:            "worker",
 		Image:           image,
 		ImagePullPolicy: corev1.PullIfNotPresent,
-		Env:             buildK8sEnvVars(req.Env),
+		Env:             append(buildK8sEnvVars(req.Env), buildK8sSecretEnvVars(req.SecretEnv)...),
 		WorkingDir:      req.WorkingDir,
 	}
 
@@ -464,6 +464,27 @@ func buildK8sEnvVars(env map[string]string) []corev1.EnvVar {
 	var out []corev1.EnvVar
 	for _, k := range keys {
 		out = append(out, corev1.EnvVar{Name: k, Value: env[k]})
+	}
+	return out
+}
+
+// buildK8sSecretEnvVars renders CreateRequest.SecretEnv as valueFrom.secretKeyRef
+// env vars. Entries with an empty SecretName are skipped (caller opted out).
+func buildK8sSecretEnvVars(secretEnv []SecretEnvVar) []corev1.EnvVar {
+	var out []corev1.EnvVar
+	for _, se := range secretEnv {
+		if se.SecretName == "" || se.EnvName == "" {
+			continue
+		}
+		out = append(out, corev1.EnvVar{
+			Name: se.EnvName,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: se.SecretName},
+					Key:                  se.SecretKey,
+				},
+			},
+		})
 	}
 	return out
 }

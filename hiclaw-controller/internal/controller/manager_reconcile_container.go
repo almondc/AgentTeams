@@ -147,6 +147,16 @@ func (r *ManagerReconciler) createManagerContainer(ctx context.Context, s *manag
 
 	managerEnv := r.EnvBuilder.BuildManager(m.Name, prov, m.Spec)
 	mergeUserEnv(managerEnv, m.Spec.Env, logger, "manager/"+m.Name)
+	// Higress Console URL: needed by any Manager skill that logs in to the
+	// Console (mcp-server-management, git-delegation-management). Not a
+	// secret — the script's own default (http://127.0.0.1:8001) only
+	// resolves in embedded/Docker mode, so incluster/k8s deployments need
+	// the real in-cluster address the controller itself already uses.
+	if r.HigressConsoleURL != "" {
+		if _, exists := managerEnv["HICLAW_HIGRESS_CONSOLE_URL"]; !exists {
+			managerEnv["HICLAW_HIGRESS_CONSOLE_URL"] = r.HigressConsoleURL
+		}
+	}
 	containerName := r.managerContainerName(m.Name)
 	saName := r.ResourcePrefix.SAName(authpkg.RoleManager, m.Name)
 	// Pod labels are layered low-to-high: CR metadata.labels, CR
@@ -181,6 +191,17 @@ func (r *ManagerReconciler) createManagerContainer(ctx context.Context, s *manag
 			logger.Error(err, "SA token request failed (non-fatal, manager auth will fail)")
 		}
 		createReq.AuthToken = token
+	}
+	if wb.Name() == "k8s" && r.RuntimeEnvSecretName != "" {
+		// Manager-only: this reconciler never builds Worker/Team-Leader
+		// CreateRequests, so this credential never reaches a Worker Pod —
+		// unlike the shared agent-pod-template-configmap.yaml overlay,
+		// which applies identically to every agent Pod the controller
+		// creates and so cannot be used to scope a credential to the
+		// Manager alone (see docs/agent-pod-template.md).
+		createReq.SecretEnv = []backend.SecretEnvVar{
+			{EnvName: "HICLAW_ADMIN_PASSWORD", SecretName: r.RuntimeEnvSecretName, SecretKey: "HICLAW_ADMIN_PASSWORD"},
+		}
 	}
 
 	r.applyEmbeddedConfig(&createReq, wb)

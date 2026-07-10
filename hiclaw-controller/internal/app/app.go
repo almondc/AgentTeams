@@ -518,17 +518,19 @@ func (a *App) initReconcilers(_ context.Context) error {
 	}
 
 	mgrReconciler := &controller.ManagerReconciler{
-		Client:           a.mgr.GetClient(),
-		Provisioner:      a.provisioner,
-		Deployer:         a.deployer,
-		Backend:          a.registry,
-		EnvBuilder:       a.envBuilder,
-		ResourcePrefix:   resourcePrefix,
-		ManagerResources: a.cfg.ManagerResources(),
-		DefaultRuntime:   a.cfg.ManagerRuntime,
-		ControllerName:   a.cfg.ControllerName,
-		UserLanguage:     a.cfg.UserLanguage,
-		UserTimezone:     a.cfg.UserTimezone,
+		Client:               a.mgr.GetClient(),
+		Provisioner:          a.provisioner,
+		Deployer:             a.deployer,
+		Backend:              a.registry,
+		EnvBuilder:           a.envBuilder,
+		ResourcePrefix:       resourcePrefix,
+		ManagerResources:     a.cfg.ManagerResources(),
+		DefaultRuntime:       a.cfg.ManagerRuntime,
+		ControllerName:       a.cfg.ControllerName,
+		UserLanguage:         a.cfg.UserLanguage,
+		UserTimezone:         a.cfg.UserTimezone,
+		RuntimeEnvSecretName: a.cfg.RuntimeEnvSecretName,
+		HigressConsoleURL:    a.cfg.HigressBaseURL,
 	}
 	if a.cfg.KubeMode == "embedded" {
 		mgrReconciler.EmbeddedConfig = &controller.ManagerEmbeddedConfig{

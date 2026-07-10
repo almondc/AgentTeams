@@ -109,6 +109,19 @@ type Config struct {
 	// if empty, leader election falls back to the legacy global lease name.
 	ControllerName string
 
+	// RuntimeEnvSecretName is the Kubernetes Secret holding this release's
+	// runtime credentials (HICLAW_ADMIN_PASSWORD among others — the same
+	// Secret the controller itself consumes via envFrom). Sourced from
+	// HICLAW_RUNTIME_ENV_SECRET_NAME (values.controller.env in the chart).
+	// When set, ManagerReconciler references it via valueFrom.secretKeyRef
+	// so the Manager Pod can log in to the Higress Console (mcp-server-
+	// management, git-delegation-management, etc. all assume this works)
+	// without the admin password ever appearing as a literal value on the
+	// Pod, in this Config, or in the Manager CR. Empty means the previous
+	// (broken, in incluster/k8s mode) behavior: no console credential
+	// reaches the Manager at all.
+	RuntimeEnvSecretName string
+
 	// Embedded-mode Manager Agent container mounts (host paths, read from env)
 	ManagerWorkspaceDir string // e.g. ~/hiclaw-manager — mounted as /root/manager-workspace
 	HostShareDir        string // e.g. ~/ — mounted as /host-share
@@ -293,8 +306,9 @@ func LoadConfig() *Config {
 		K8sManagerCPU:           envOrDefault("HICLAW_K8S_MANAGER_CPU", "2"),
 		K8sManagerMemory:        envOrDefault("HICLAW_K8S_MANAGER_MEMORY", "4Gi"),
 
-		ControllerURL:  os.Getenv("HICLAW_CONTROLLER_URL"),
-		ControllerName: os.Getenv("HICLAW_CONTROLLER_NAME"),
+		ControllerURL:        os.Getenv("HICLAW_CONTROLLER_URL"),
+		ControllerName:       os.Getenv("HICLAW_CONTROLLER_NAME"),
+		RuntimeEnvSecretName: os.Getenv("HICLAW_RUNTIME_ENV_SECRET_NAME"),
 
 		ManagerWorkspaceDir: os.Getenv("HICLAW_WORKSPACE_DIR"),
 		HostShareDir:        os.Getenv("HICLAW_HOST_SHARE_DIR"),
