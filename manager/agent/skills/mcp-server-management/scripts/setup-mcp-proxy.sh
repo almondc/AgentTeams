@@ -330,16 +330,16 @@ if [ -n "${MANAGER_KEY}" ]; then
     if [ -f "${MANAGER_MCPORTER}" ]; then
         UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${MANAGER_KEY}" \
             '.mcpServers[$name] = {
-                url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
-                transport: "http",
+                url: ($baseUrl + "/mcp-servers/" + $name + "/sse"),
+                transport: "sse",
                 headers: {Authorization: ("Bearer " + $key)}
             }' "${MANAGER_MCPORTER}" 2>/dev/null)
         echo "${UPDATED}" | jq . > "${MANAGER_MCPORTER}"
     else
         jq -n --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${MANAGER_KEY}" \
             '{mcpServers: {($name): {
-                url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
-                transport: "http",
+                url: ($baseUrl + "/mcp-servers/" + $name + "/sse"),
+                transport: "sse",
                 headers: {Authorization: ("Bearer " + $key)}
             }}}' > "${MANAGER_MCPORTER}"
     fi
@@ -383,8 +383,8 @@ if [ -f "${REGISTRY_FILE}" ]; then
         if [ -f "${MCPORTER_FILE}" ]; then
             UPDATED=$(jq --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${WORKER_KEY}" \
                 '.mcpServers[$name] = {
-                    url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
-                    transport: "http",
+                    url: ($baseUrl + "/mcp-servers/" + $name + "/sse"),
+                    transport: "sse",
                     headers: {Authorization: ("Bearer " + $key)}
                 }' "${MCPORTER_FILE}" 2>/dev/null)
             if [ -n "${UPDATED}" ] && [ "${UPDATED}" != "null" ]; then
@@ -397,8 +397,8 @@ if [ -f "${REGISTRY_FILE}" ]; then
         else
             jq -n --arg name "${MCP_SERVER_NAME}" --arg baseUrl "${AI_GATEWAY_BASE_URL}" --arg key "${WORKER_KEY}" \
                 '{mcpServers: {($name): {
-                    url: ($baseUrl + "/mcp-servers/" + $name + "/mcp"),
-                    transport: "http",
+                    url: ($baseUrl + "/mcp-servers/" + $name + "/sse"),
+                    transport: "sse",
                     headers: {Authorization: ("Bearer " + $key)}
                 }}}' > "${MCPORTER_FILE}"
             log "  Created config/mcporter.json for ${wname}"
