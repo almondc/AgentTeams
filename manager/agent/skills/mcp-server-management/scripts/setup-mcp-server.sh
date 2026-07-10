@@ -123,14 +123,26 @@ AI_GATEWAY_DOMAIN="${HICLAW_AI_GATEWAY_DOMAIN:-aigw-local.hiclaw.io}"
 # aigw-local.hiclaw.io:8080 is an embedded/Docker-mode convention (that hostname
 # deliberately resolves to 127.0.0.1 via hiclaw.io's own public DNS as a
 # same-container convenience). In incluster/k8s mode the real gateway Service
-# listens on 80/443, not 8080, and even with a hostAlias correcting the DNS
-# answer, port 8080 still connects to nothing there. HICLAW_AI_GATEWAY_URL is
-# already correctly set for every mode (the chart sets it unconditionally on
-# the controller; the woodfield fork's manager-console-credentials fix doesn't
-# touch this one, it was already fine) — use it as the base for mcporter.json
-# URLs instead of reconstructing one from the domain+hardcoded port. Falls back
-# to the domain-based construction, matching prior behavior, when unset.
-AI_GATEWAY_BASE_URL="${HICLAW_AI_GATEWAY_URL:-http://${AI_GATEWAY_DOMAIN}:8080}"
+# listens on 80/443, not 8080 — but the *hostname* still must stay
+# AI_GATEWAY_DOMAIN, not the gateway's own Service DNS name: Higress's MCP
+# server route match is keyed off the HTTP Host header matching the domain the
+# server was registered with (see the `domains` field in Step 2 below), so
+# swapping in the Service hostname produces a 404 (no route match) even though
+# the connection itself succeeds. Confirmed live: aigw-local.hiclaw.io:80
+# (hostname preserved, port fixed) correctly reaches the registered route;
+# http://<service-name>.hiclaw.svc.cluster.local:80 (right host, wrong
+# hostname) 404s. A hostAlias resolves the domain to the real gateway
+# ClusterIP in k8s mode (see k8s/hiclaw/agent-pod-template-configmap.yaml in
+# the woodfield fork's consuming repo) — only the port needed fixing here.
+# Extracted from HICLAW_AI_GATEWAY_URL (already correctly set for every mode)
+# rather than hardcoded, so this tracks whatever port the real chart/values
+# actually configure instead of assuming 80.
+AI_GATEWAY_PORT="${HICLAW_AI_GATEWAY_URL##*:}"
+AI_GATEWAY_PORT="${AI_GATEWAY_PORT%%/*}"
+case "${AI_GATEWAY_PORT}" in
+    ''|*[!0-9]*) AI_GATEWAY_PORT="8080" ;;
+esac
+AI_GATEWAY_BASE_URL="http://${AI_GATEWAY_DOMAIN}:${AI_GATEWAY_PORT}"
 # Same precedence as gateway-api.sh's _HIGRESS_CONSOLE_URL (this script doesn't source that lib,
 # so it can't reuse the variable directly) — 127.0.0.1:8001 only resolves in embedded/Docker mode;
 # incluster/k8s mode needs HICLAW_HIGRESS_CONSOLE_URL (set on the Manager container since the
